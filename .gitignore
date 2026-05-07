@@ -60,3 +60,4 @@ OLD Files/
 # =============================================================
 Data/processed/temp_imerg_csv/
 *.log
+.codex
