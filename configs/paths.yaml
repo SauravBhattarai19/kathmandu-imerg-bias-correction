@@ -1,0 +1,49 @@
+# =============================================================================
+# paths.yaml  –  All project-wide file and directory paths
+#
+# All paths are relative to the project root unless they start with '/'.
+# Scripts load this file and construct absolute paths via pathlib.
+# =============================================================================
+
+project:
+  root: .                           # relative to this file's parent-parent
+  name: kathmandu-wms-bias-correction
+
+# ---------------------------------------------------------------------------
+# Input data  (everything originates here)
+# ---------------------------------------------------------------------------
+data:
+  raw:
+    stage_csv:       Data/raw/Discharge-DHM/Bagmati at Khokana_River Water Level Inst_1990-01-01_2025-03-27_Point.csv
+    rating_curve:    Data/raw/Discharge-DHM/Rating Curve.txt
+    imerg_raw_dir:   Data/raw/IMERG                      # downloaded IMERG CSVs (GEE)
+    citizen_sci:     Data/raw/Citizen Science/KV-Data    # tipping-bucket gauge data
+
+  processed:
+    discharge_full:  Data/processed/Discharge_full.csv   # full stage→Q time-series (script 01)
+    imerg_gag_dir:   Data/processed/IMERG_gag            # .gag files per flood event (script 02)
+    dhm_dir:         Data/processed/DHM_Discharge        # per-event discharge CSVs (script 01)
+    flood_csv:       Data/processed/flood_data.csv       # event metadata (25 floods)
+
+# ---------------------------------------------------------------------------
+# GSSHA models  (all model versions live under Data/models/)
+# ---------------------------------------------------------------------------
+model:
+  original:          Data/models/Model-9_17              # pristine base model
+  sbc:               Data/models/Model-SBC               # pipeline-tuned copy (used for runs)
+  project_name:      Khokana                             # stem of the .prj file
+  gssha_executable:  gssha81
+
+# ---------------------------------------------------------------------------
+# Outputs  (all run outputs live under outputs/runs/<run_id>/)
+# ---------------------------------------------------------------------------
+outputs:
+  base:              outputs
+  runs_root:         outputs/runs
+  latest_link:       outputs/latest
+
+# ---------------------------------------------------------------------------
+# Temporary / scratch
+# ---------------------------------------------------------------------------
+temp:
+  base: /tmp/kathmandu_wms

@@ -1,0 +1,51 @@
+# =============================================================================
+# stations.yaml  –  Citizen Science Tipping-Bucket Rain Gauge Network
+#
+# Coordinate system:  WGS84 (EPSG:4326) latitude/longitude
+# UTM projection:     EPSG:32645  (UTM Zone 45N – covers Kathmandu)
+# =============================================================================
+
+utm_projection: EPSG:32645
+
+stations:
+  - station_id:  TP001
+    name:        "TP001 - Nagarjun (Prativa's house)"
+    latitude:    27.738011
+    longitude:   85.288957
+    notes:       "Northwestern Kathmandu Valley; Nagarjun Forest buffer"
+
+  - station_id:  TP002
+    name:        "TP002 - Tokha (Ashish Dangol's house)"
+    latitude:    27.769890
+    longitude:   85.328733
+    notes:       "Northern valley, Tokha municipality"
+
+  - station_id:  TP003
+    name:        "TP003 - Lapsephedi"
+    latitude:    27.746574
+    longitude:   85.481040
+    notes:       "Northeastern valley boundary"
+
+  - station_id:  TP005
+    name:        "TP005 - Kusunti Office"
+    latitude:    27.666332
+    longitude:   85.314217
+    notes:       "Central-south Kathmandu"
+
+  - station_id:  TP006
+    name:        "TP006 - Bhaktapur (KEC)"
+    latitude:    27.671243
+    longitude:   85.439106
+    notes:       "Eastern valley, Bhaktapur"
+
+  - station_id:  TP007
+    name:        "TP007 - Bhardev"
+    latitude:    27.549370
+    longitude:   85.380780
+    notes:       "Southeastern valley, near Khokana gauge"
+
+  - station_id:  TP008
+    name:        "TP008 - Okhreni Tipping Bucket"
+    latitude:    27.796550
+    longitude:   85.422114
+    notes:       "Northern valley, Okhreni"
