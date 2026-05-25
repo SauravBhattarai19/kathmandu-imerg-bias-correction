@@ -183,10 +183,15 @@ class IMERGDownloader:
 
         # Pivot to wide format: one row per timestamp, one column per station
         df_long = pd.DataFrame(records)
-        df_long["Date and Time"] = pd.to_datetime(df_long["Date and Time"])
+        # GEE returns UTC timestamps — convert to Nepal Standard Time (UTC+5:45)
+        # before filtering and saving so timestamps in the GAG file are Nepal time.
+        df_long["Date and Time"] = (
+            pd.to_datetime(df_long["Date and Time"])
+            + pd.Timedelta(hours=5, minutes=45)
+        )
         df_wide = df_long.groupby("Date and Time").first().reset_index()
 
-        # Trim to exact Nepal-time window
+        # Trim to exact Nepal-time window (comparison now valid: both Nepal time)
         mask = (df_wide["Date and Time"] >= pd.to_datetime(start_nepal)) & \
                (df_wide["Date and Time"] <= pd.to_datetime(end_nepal))
         df_wide = df_wide[mask].reset_index(drop=True)

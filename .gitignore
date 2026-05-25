@@ -61,3 +61,10 @@ OLD Files/
 Data/processed/temp_imerg_csv/
 *.log
 .codex
+
+# Regenerable processed outputs (large)
+Data/processed/Discharge_full.csv
+
+# Scratch / one-off files
+a.txt
+plot_to_put.py

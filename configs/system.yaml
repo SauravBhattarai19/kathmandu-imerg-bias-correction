@@ -1,39 +1,24 @@
-# =============================================================================
-# system.yaml  –  Computational resource configuration
+# System configuration
+# AMD Threadripper PRO 7995WX — 192 logical cores
 #
-# Adjust for local laptop vs HPC cluster.
-# =============================================================================
+# Parallelism: 4 parallel runs × 48 threads/run = 192 cores
+# Change ONLY these two values to retune core usage.
+# Both watershed and station modes read from here.
 
-# Google Earth Engine
-gee:
-  project: ee-sauravbhattarai1999
-  api_delay_s: 2.0             # seconds to sleep between consecutive GEE calls
-
-# GSSHA execution
 gssha:
-  executable:     gssha81
-  threads_per_run: 4           # OpenMP threads per simulation
-  parallel_runs:  8            # simultaneous simulations
-  # HPC example: 192 cores / 4 threads = 48 parallel runs
-  # Laptop example: 8 cores  / 4 threads =  2 parallel runs
-  omp_stack_size: 512M
+  executable:      gssha81
+  threads_per_run: 48           # OpenMP threads per GSSHA simulation
+  parallel_runs:   4            # simultaneous GSSHA processes
+  omp_stack_size:  512M
 
-# Bias correction algorithm
+watershed_correction:
+  max_iterations:         5
+  convergence_threshold:  0.02
+  alpha_bounds:           [0.2, 5.0]
+  min_elasticity:         0.10
+  # parallel_runs and threads_per_run come from gssha: section above
+
 bias_correction:
-  delta:          0.10         # ±10 % rainfall perturbation for elasticity
-  lambda_smooth:  0.30         # spatial smoothness weight
-  tau_prior:      0.20         # prior constraint weight
-  max_iterations: 5
-  convergence_threshold: 0.05  # stop when mean error < 5 %
-
-# Stage → discharge
-preprocessing:
-  sentinel_value: -9999990     # DHM no-data flag
-  max_discharge:  10000        # m³/s – values above treated as errors
-
-# Flood event detection
-flood_identification:
-  n_events:                25
-  event_window_days:        3   # half-window around the peak
-  min_peak_spacing_days:   10   # minimum separation between distinct events
-  min_discharge:            0   # m³/s minimum threshold
+  delta:          0.10
+  lambda_smooth:  1.0
+  tau_prior:      1.0

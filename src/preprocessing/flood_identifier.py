@@ -62,6 +62,7 @@ class FloodIdentifier:
         n_events: int = 25,
         discharge_col: str = "Discharge_m3s",
         datetime_col: str = "DateTime",
+        monsoon_only: bool = False,
     ) -> pd.DataFrame:
         """
         Select the top-*n_events* independent flood peaks.
@@ -72,6 +73,7 @@ class FloodIdentifier:
         n_events       : number of events to select
         discharge_col  : column name for discharge values
         datetime_col   : column name for timestamps
+        monsoon_only   : if True, restrict selection to monsoon months (Jun–Sep)
 
         Returns
         -------
@@ -87,6 +89,10 @@ class FloodIdentifier:
         # Remove sentinel / impossible values
         df = df[(df[discharge_col] >= self.min_discharge) &
                 (df[discharge_col] < 1e5)].copy()
+
+        # Restrict to monsoon months (Jun–Sep) if requested
+        if monsoon_only:
+            df = df[df[datetime_col].dt.month.isin(MONSOON_MONTHS)].copy()
 
         min_gap = timedelta(days=self.min_peak_spacing_days)
         half_win = timedelta(days=self.event_window_days)

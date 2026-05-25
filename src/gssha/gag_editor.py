@@ -94,6 +94,10 @@ class GagFile:
         ]
         return new
 
+    def scale_uniform(self, scalar: float) -> "GagFile":
+        """Return a new GagFile with all stations scaled by the same factor."""
+        return self.scale_all_stations([scalar] * self.num_stations)
+
     def _shallow_copy(self) -> "GagFile":
         obj = GagFile.__new__(GagFile)
         obj.gag_path = self.gag_path

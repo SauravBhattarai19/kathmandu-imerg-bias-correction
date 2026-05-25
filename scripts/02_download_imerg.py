@@ -69,7 +69,9 @@ def _p(rel: str) -> Path:
 FLOOD_CSV    = _p(paths_cfg["data"]["processed"]["flood_csv"])
 IMERG_DIR    = _p(paths_cfg["data"]["processed"]["imerg_gag_dir"])
 TEMP_CSV_DIR = _p("Data/processed/temp_imerg_csv")
-GEE_PROJECT  = sys_cfg["gee"]["project"]
+# Optional: only needed if you want to override the downloader default.
+# (Older configs may not have a `gee:` section.)
+GEE_PROJECT  = (sys_cfg.get("gee") or {}).get("project")
 
 # Build stations DataFrame from YAML
 stations_df = pd.DataFrame(station_cfg["stations"])
@@ -103,7 +105,7 @@ def main(filter_events: list[str] | None = None) -> None:
 
     # Download IMERG CSVs
     TEMP_CSV_DIR.mkdir(parents=True, exist_ok=True)
-    downloader = IMERGDownloader(gee_project=GEE_PROJECT)
+    downloader = IMERGDownloader(gee_project=GEE_PROJECT) if GEE_PROJECT else IMERGDownloader()
     if not downloader.initialise_gee():
         sys.exit("GEE initialisation failed. Run: earthengine authenticate")
 
@@ -115,6 +117,7 @@ def main(filter_events: list[str] | None = None) -> None:
     )
 
     # Convert CSVs → GAG files
+    # mm/hr → mm per timestep conversion is handled inside batch_convert_csvs
     print(f"\nConverting CSVs to GAG format …")
     IMERG_DIR.mkdir(parents=True, exist_ok=True)
     created = batch_convert_csvs(TEMP_CSV_DIR, utm_coords, IMERG_DIR)

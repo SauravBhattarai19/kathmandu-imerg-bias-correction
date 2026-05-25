@@ -62,7 +62,7 @@ class GsshaRunner:
         gag_file_path: str | Path,
         run_dir: Optional[str | Path] = None,
         cleanup: bool = False,
-        threads: int = 8,
+        threads: int = 48,
     ) -> Tuple[float, str]:
         """
         Run one GSSHA simulation.
@@ -202,6 +202,7 @@ class GsshaRunner:
                 stderr=err,
                 env=env,
                 preexec_fn=_set_stack,
+                timeout=7200,    # 2-hour hard cap; typical run ~1400s at 4 threads
             )
 
         if result.returncode != 0:
@@ -248,7 +249,7 @@ class GsshaRunner:
 def run_gssha_simple(
     base_model_dir: str | Path,
     gag_file: str | Path,
-    threads: int = 8,
+    threads: int = 48,
 ) -> float:
     """One-liner wrapper: run GSSHA and return peak discharge [m³/s]."""
     runner = GsshaRunner(base_model_dir)
