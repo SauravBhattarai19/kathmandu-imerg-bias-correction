@@ -316,11 +316,14 @@ def main(run_id: str | None, gap_threshold: float) -> None:
 def _print_cluster_summary(df: pd.DataFrame) -> None:
     print("\n" + "=" * 70)
     print("  CLUSTER SUMMARY  (bias_ratio = CS_mm / IMERG_mm)")
+    print("  Note: CS=0mm when IMERG>20mm excluded (likely gauge malfunction)")
     print("─" * 70)
     print(f"  {'CLUSTER':<18}  {'N':>4}  {'Mean ratio':>10}  {'Std':>6}  INTERPRETATION")
     print(f"  {'─'*18}  {'─'*4}  {'─'*10}  {'─'*6}  {'─'*35}")
 
+    # Exclude zero-CS readings during active IMERG events (likely gauge malfunction)
     good = df[df["cs_flag"] == "ok"].dropna(subset=["bias_ratio"])
+    good = good[~((good["CS_mm"] == 0) & (good["IMERG_mm"] > 20))]
     for cluster in ["overestimation", "balanced", "underestimation", "unknown"]:
         sub = good[good["cluster"] == cluster]
         if sub.empty:
@@ -340,14 +343,25 @@ def _print_cluster_summary(df: pd.DataFrame) -> None:
     all_good = good.dropna(subset=["bias_ratio"])
     if not all_good.empty:
         print(f"  {'Overall':<18}  {len(all_good):>4}  {all_good['bias_ratio'].mean():>10.3f}  "
-              f"{all_good['bias_ratio'].std():>6.3f}  (all events, ok data only)")
+              f"{all_good['bias_ratio'].std():>6.3f}  (gauge-active readings only)")
     print("=" * 70)
+
+    # Coverage warning
+    total_records = len(df)
+    no_data = (df["cs_flag"] == "no_data").sum()
+    zero_malfunc = ((df["cs_flag"] == "ok") & (df["CS_mm"].fillna(-1) == 0) & (df["IMERG_mm"].fillna(0) > 20)).sum()
+    print(f"\n  Data coverage: {total_records} records total")
+    print(f"    no_data (CS files end 2020-12-31): {no_data} ({100*no_data/total_records:.0f}%)")
+    print(f"    zero-during-rain (excluded above): {zero_malfunc}")
+    print(f"    gauge-active readings used:        {len(all_good)}")
+    print(f"  ⚠ CS data only covers 2018–2020 — 2021–2024 events have no gauge data.")
 
 
 def _print_station_summary(df: pd.DataFrame) -> None:
-    print("\n  PER-STATION MEAN BIAS RATIO  (CS/IMERG)")
+    print("\n  PER-STATION MEAN BIAS RATIO  (CS/IMERG, gauge-active only)")
     print("─" * 50)
     good = df[df["cs_flag"] == "ok"].dropna(subset=["bias_ratio"])
+    good = good[~((good["CS_mm"] == 0) & (good["IMERG_mm"] > 20))]
     for sid in GAG_STATION_ORDER:
         sub = good[good["station_id"] == sid]
         if sub.empty:
@@ -360,6 +374,7 @@ def _print_station_summary(df: pd.DataFrame) -> None:
 
 def _save_summaries(df: pd.DataFrame, out_dir: Path) -> None:
     good = df[df["cs_flag"] == "ok"].dropna(subset=["bias_ratio"])
+    good = good[~((good["CS_mm"] == 0) & (good["IMERG_mm"] > 20))]
 
     cluster_summary = (
         good.groupby("cluster")["bias_ratio"]
@@ -383,6 +398,7 @@ def _save_summaries(df: pd.DataFrame, out_dir: Path) -> None:
 def _plot(df: pd.DataFrame, out_dir: Path) -> None:
     """Two-panel plot: scatter CS vs IMERG (coloured by cluster) + per-station ratio bars."""
     good = df[df["cs_flag"] == "ok"].dropna(subset=["CS_mm", "IMERG_mm", "bias_ratio"])
+    good = good[~((good["CS_mm"] == 0) & (good["IMERG_mm"] > 20))]
     if good.empty:
         print("⚠  No valid data for plotting.")
         return
