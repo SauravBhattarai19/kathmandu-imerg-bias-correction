@@ -80,6 +80,7 @@ class WatershedIterator:
         max_iterations: int = 5,
         alpha_bounds: Tuple[float, float] = (0.2, 5.0),
         min_elasticity: float = 0.10,
+        trim_fraction: float = 0.25,
         parallel_runs: int = 4,
         threads_per_run: int = 48,
         dry_run: bool = False,
@@ -91,6 +92,7 @@ class WatershedIterator:
         self.delta = delta
         self.convergence_threshold = convergence_threshold
         self.max_iterations = max_iterations
+        self.trim_fraction = trim_fraction
         self.parallel_runs = parallel_runs
         self.threads_per_run = threads_per_run
         self.dry_run = dry_run
@@ -105,6 +107,7 @@ class WatershedIterator:
             delta=delta,
             min_elasticity=min_elasticity,
             alpha_bounds=alpha_bounds,
+            trim_fraction=trim_fraction,
         )
 
     # ------------------------------------------------------------------
@@ -133,6 +136,8 @@ class WatershedIterator:
         _p(f"  Max iterations      : {self.max_iterations}")
         _p(f"  Convergence (|α−1|<): {self.convergence_threshold}")
         _p(f"  Perturbation δ      : ±{int(self.delta*100)}%")
+        _p(f"  Trim fraction       : {self.trim_fraction:.2f}  "
+           f"(drop {int(self.trim_fraction*len(event_ids))} events each tail)")
         _p(f"  Parallel GSSHA runs : {self.parallel_runs}")
         _p(f"  Threads / run       : {self.threads_per_run}")
         _p(f"  Total cores used    : {self.parallel_runs * self.threads_per_run}")
@@ -244,7 +249,14 @@ class WatershedIterator:
                 sym  = "─" if note else "✓"
                 _p(f"  {sym} {er.event_id:<33}  {eps:7.3f}  {ast:7.4f}  {note}")
 
-            _p(f"\n  Aggregation (geometric median of {solver_result.n_valid} valid events):")
+            n_trim = solver_result.n_trimmed
+            agg_label = (
+                f"trimmed geometric mean ({n_trim} dropped each tail, "
+                f"{solver_result.n_valid - 2*n_trim} used)"
+                if n_trim > 0 else
+                f"geometric median ({solver_result.n_valid} events)"
+            )
+            _p(f"\n  Aggregation ({agg_label}):")
             _p(f"    α_k           = {alpha_k:.6f}")
             _p(f"    |α_k − 1|     = {abs(alpha_k - 1):.4f}  "
                f"(threshold = {self.convergence_threshold})")
@@ -332,7 +344,77 @@ class WatershedIterator:
         _p(f"  Total time   = {summary['total_time_s']:.1f}s")
         _p("═" * 72)
 
+        # ---- Cluster-aware performance breakdown (last iteration) ----
+        self._print_cluster_summary(alpha_cum, convergence_log)
+
         return summary
+
+    def _print_cluster_summary(
+        self,
+        alpha_cum: float,
+        convergence_log: list,
+    ) -> None:
+        """Print per-cluster MAPE breakdown using the final iteration artifacts."""
+        last_iter = len(convergence_log)
+        if last_iter == 0:
+            return
+
+        perf_path = (
+            self.output_dir / f"iteration_{last_iter:02d}" / "artifacts" / "Performance.csv"
+        )
+        alpha_path = (
+            self.output_dir / f"iteration_{last_iter:02d}" / "artifacts" / "Alpha_Scalar.json"
+        )
+        if not perf_path.exists() or not alpha_path.exists():
+            return
+
+        try:
+            perf_df = pd.read_csv(perf_path)
+            perf_df = perf_df[perf_df["event_id"] != "MEAN_MAPE"].copy()
+            with open(alpha_path) as fh:
+                alpha_data = json.load(fh)
+            event_alphas: dict = alpha_data.get("event_alphas", {})
+        except Exception:
+            return
+
+        def _cluster(alpha_val: float) -> str:
+            if alpha_val < 0.70:
+                return "OVERESTIMATION  (GSSHA too high)"
+            if alpha_val > 1.20:
+                return "UNDERESTIMATION (IMERG too low) "
+            return "BALANCED                        "
+
+        rows_by_cluster: dict = {}
+        for _, row in perf_df.iterrows():
+            eid = row["event_id"]
+            a   = event_alphas.get(eid, 1.0)
+            c   = _cluster(a)
+            rows_by_cluster.setdefault(c, []).append(row["abs_pct_error"])
+
+        _p("\n" + "═" * 72)
+        _p("  CLUSTER-AWARE PERFORMANCE BREAKDOWN (final iteration)")
+        _p("─" * 72)
+        _p(f"  {'CLUSTER':<40}  {'N':>3}  {'MEAN MAPE':>10}  {'INTERPRETATION'}")
+        _p(f"  {'─'*40}  {'─'*3}  {'─'*10}  {'─'*30}")
+        for cluster, errs in sorted(rows_by_cluster.items()):
+            mean_err = float(np.mean(errs))
+            if "BALANCED" in cluster:
+                note = "← reliable α estimate"
+            elif "OVERESTIMATION" in cluster:
+                note = "← GSSHA model error dominates"
+            else:
+                note = "← IMERG misses subgrid rain"
+            _p(f"  {cluster}  {len(errs):>3}  {mean_err:>9.1f}%  {note}")
+        _p("─" * 72)
+        all_errs = [e for v in rows_by_cluster.values() for e in v]
+        _p(f"  Overall MAPE : {float(np.mean(all_errs)):.1f}%  (all events)")
+        bal_errs = rows_by_cluster.get("BALANCED                        ", [])
+        if bal_errs:
+            _p(f"  Balanced MAPE: {float(np.mean(bal_errs)):.1f}%  "
+               f"(robust α_cum = {alpha_cum:.4f}  ≈  IMERG "
+               f"{'over' if alpha_cum < 1 else 'under'}estimates by "
+               f"{abs(1-alpha_cum)*100:.1f}%)")
+        _p("═" * 72)
 
     # ------------------------------------------------------------------
     # Private helpers

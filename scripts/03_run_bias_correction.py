@@ -233,7 +233,8 @@ def _run_watershed(out: dict, threads: int, parallel: int, dry_run: bool) -> boo
     if dry_run:
         print("\n[DRY-RUN] Skipping real GSSHA runs — using synthetic discharges.")
 
-    alpha_bounds = tuple(wc_cfg["alpha_bounds"])
+    alpha_bounds  = tuple(wc_cfg["alpha_bounds"])
+    trim_fraction = float(wc_cfg.get("trim_fraction", 0.25))
 
     iterator = WatershedIterator(
         base_model_dir=BASE_MODEL,
@@ -245,6 +246,7 @@ def _run_watershed(out: dict, threads: int, parallel: int, dry_run: bool) -> boo
         max_iterations=wc_cfg["max_iterations"],
         alpha_bounds=alpha_bounds,
         min_elasticity=wc_cfg["min_elasticity"],
+        trim_fraction=trim_fraction,
         parallel_runs=parallel,
         threads_per_run=threads,
         dry_run=dry_run,

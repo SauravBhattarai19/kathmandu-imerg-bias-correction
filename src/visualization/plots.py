@@ -371,6 +371,103 @@ def plot_watershed_performance(
     return fig
 
 
+def plot_cluster_analysis(
+    perf_df: pd.DataFrame,
+    event_alphas: Dict[str, float],
+    imerg_totals: Dict[str, float],
+    output_path: Optional[str | Path] = None,
+    figsize: tuple = (14, 6),
+) -> plt.Figure:
+    """
+    Two-panel cluster diagnostic figure.
+
+    Panel A (left)  — scatter: IMERG event total (mm) vs observed peak discharge
+                      coloured by bias cluster (overestimation / balanced / underestimation)
+    Panel B (right) — bar: per-event α* coloured by cluster, reference line at α=1
+
+    Parameters
+    ----------
+    perf_df        : Performance.csv DataFrame (columns: event_id, Q_obs_m3s, abs_pct_error)
+    event_alphas   : {event_id: α*} from Alpha_Scalar.json event_alphas field
+    imerg_totals   : {event_id: total_mm} average IMERG rainfall across stations
+    """
+    COLOUR_OVER  = "#e84040"   # overestimation: α < 0.70
+    COLOUR_BAL   = "#2ca02c"   # balanced:       0.70 ≤ α ≤ 1.20
+    COLOUR_UNDER = "#1f77b4"   # underestimation: α > 1.20
+
+    def _cluster_colour(a: float) -> str:
+        if a < 0.70:
+            return COLOUR_OVER
+        if a > 1.20:
+            return COLOUR_UNDER
+        return COLOUR_BAL
+
+    def _cluster_label(a: float) -> str:
+        if a < 0.70:
+            return "Overestimation (α<0.70)"
+        if a > 1.20:
+            return "Underestimation (α>1.20)"
+        return "Balanced (0.70≤α≤1.20)"
+
+    events  = perf_df["event_id"].tolist()
+    q_obs   = perf_df["Q_obs_m3s"].tolist()
+    alphas  = [event_alphas.get(e, 1.0) for e in events]
+    totals  = [imerg_totals.get(e, float("nan")) for e in events]
+    colours = [_cluster_colour(a) for a in alphas]
+    years   = [e.split("_")[2][:4] if "_" in e else "" for e in events]
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    # ---- Panel A: scatter IMERG total vs Q_obs ----
+    ax = axes[0]
+    for label, colour in [
+        ("Overestimation (α<0.70)", COLOUR_OVER),
+        ("Balanced (0.70≤α≤1.20)", COLOUR_BAL),
+        ("Underestimation (α>1.20)", COLOUR_UNDER),
+    ]:
+        mask = [_cluster_label(a) == label for a in alphas]
+        xs = [t for t, m in zip(totals, mask) if m]
+        ys = [q for q, m in zip(q_obs,  mask) if m]
+        ax.scatter(xs, ys, c=colour, label=label, s=70, zorder=3, edgecolors="k", lw=0.5)
+
+    for i, (x, y, yr) in enumerate(zip(totals, q_obs, years)):
+        ax.annotate(yr, (x, y), textcoords="offset points", xytext=(4, 3),
+                    fontsize=7, color="#555555")
+
+    ax.set_xlabel("IMERG event total (mm, avg over 7 stations)", fontsize=10)
+    ax.set_ylabel("Observed peak discharge (m³/s)", fontsize=10)
+    ax.set_title("IMERG Rainfall vs Observed Discharge\n(coloured by bias cluster)", fontsize=11)
+    ax.legend(fontsize=8, framealpha=0.9)
+    ax.grid(True, alpha=0.3)
+
+    # ---- Panel B: per-event α* bar chart ----
+    ax = axes[1]
+    x = np.arange(len(events))
+    bars = ax.bar(x, alphas, color=colours, alpha=0.85, edgecolor="k", linewidth=0.4)
+    ax.axhline(1.0, color="k", lw=1.2, ls="--", label="α = 1 (no correction)")
+    ax.axhline(0.70, color=COLOUR_OVER,  lw=0.8, ls=":", alpha=0.7)
+    ax.axhline(1.20, color=COLOUR_UNDER, lw=0.8, ls=":", alpha=0.7)
+
+    short = [e.replace("event_", "").replace("_flood", "") for e in events]
+    ax.set_xticks(x)
+    ax.set_xticklabels(short, rotation=55, ha="right", fontsize=6)
+    ax.set_ylabel("Per-event correction factor α*", fontsize=10)
+    ax.set_title("Per-event α* — bimodal distribution\nshows single scalar cannot resolve all events",
+                 fontsize=11)
+    ax.legend(fontsize=8)
+    ax.grid(True, axis="y", alpha=0.3)
+    ax.set_ylim(0, max(alphas) * 1.15)
+
+    fig.suptitle("IMERG Bias Cluster Analysis — Bagmati at Khokana", fontsize=12, y=1.01)
+    fig.tight_layout()
+
+    if output_path:
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        print(f"✓ Cluster analysis plot saved → {output_path}")
+
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -45,12 +45,24 @@ class SolverResult:
     n_valid:              int                    # events used in aggregation
     n_filtered:           int                    # events discarded
     log_alpha_std:        float                  # spread of ln(α*_e) — diagnostic
+    n_trimmed:            int = 0                # events trimmed from each tail
     filtered_reasons:     Dict[str, str] = field(default_factory=dict)
 
 
 class WatershedSolver:
     """
     Aggregate per-event GSSHA perturbation runs into a single scalar α_k.
+
+    Aggregation method
+    ------------------
+    By default uses a **trimmed geometric mean**: the top and bottom
+    `trim_fraction` of per-event log-alphas are discarded, and the mean
+    of the remainder is exponentiated.  With trim_fraction=0.25 on 20
+    events this drops the 5 most extreme events from each tail, leaving
+    the middle 10 (the "balanced" cluster) to drive the result.
+
+    Set trim_fraction=0.0 to recover the original strict geometric median
+    behaviour (equivalent to trim_fraction=0.5).
     """
 
     def __init__(
@@ -58,10 +70,12 @@ class WatershedSolver:
         delta: float = 0.10,
         min_elasticity: float = 0.10,
         alpha_bounds: Tuple[float, float] = (0.2, 5.0),
+        trim_fraction: float = 0.25,
     ):
         self.delta = delta
         self.min_elasticity = min_elasticity
         self.alpha_lo, self.alpha_hi = alpha_bounds
+        self.trim_fraction = float(np.clip(trim_fraction, 0.0, 0.49))
         # Pre-compute denominator (constant for a given δ)
         self._log_denom = np.log(1.0 + delta) - np.log(1.0 - delta)
 
@@ -130,12 +144,30 @@ class WatershedSolver:
                 n_valid=0,
                 n_filtered=n_filtered,
                 log_alpha_std=0.0,
+                n_trimmed=0,
                 filtered_reasons=filtered_reasons,
             )
 
         arr = np.array(log_alphas_valid)
-        alpha_k      = float(np.exp(np.median(arr)))   # geometric median
-        log_alpha_std = float(np.std(arr))
+        n = len(arr)
+
+        # Trimmed geometric mean: discard top/bottom trim_fraction of events
+        n_trim = max(0, int(n * self.trim_fraction))
+        if n_trim > 0 and 2 * n_trim < n:
+            trimmed = np.sort(arr)[n_trim: n - n_trim]
+            n_used  = len(trimmed)
+            alpha_k = float(np.exp(np.mean(trimmed)))
+            logger.debug(
+                "  trimmed geometric mean: dropped %d low + %d high → used %d/%d events",
+                n_trim, n_trim, n_used, n,
+            )
+        else:
+            # Fallback to geometric median (trim_fraction=0 or too few events)
+            trimmed = arr
+            n_used  = n
+            alpha_k = float(np.exp(np.median(arr)))
+
+        log_alpha_std = float(np.std(arr))   # std of ALL events (diagnostic)
 
         return SolverResult(
             alpha_k=alpha_k,
@@ -144,6 +176,7 @@ class WatershedSolver:
             n_valid=len(log_alphas_valid),
             n_filtered=n_filtered,
             log_alpha_std=log_alpha_std,
+            n_trimmed=n_trim,
             filtered_reasons=filtered_reasons,
         )
 

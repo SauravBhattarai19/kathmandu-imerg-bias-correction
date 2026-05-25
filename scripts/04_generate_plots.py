@@ -52,7 +52,9 @@ from src.visualization.plots import (
     plot_performance_summary,
     plot_watershed_convergence,
     plot_watershed_performance,
+    plot_cluster_analysis,
 )
+from src.gssha.gag_editor import GagFile
 
 
 def _load(name: str) -> dict:
@@ -161,6 +163,65 @@ def _run_station(run_root: Path) -> None:
 # Watershed mode
 # ---------------------------------------------------------------------------
 
+def _plot_cluster(run_root: Path, perf_iterations: dict, figures_dir: Path) -> None:
+    """Build cluster analysis plot from final iteration artifacts + IMERG GAG files."""
+    if not perf_iterations:
+        return
+    final_iter   = max(perf_iterations.keys())
+    alpha_path   = run_root / f"iteration_{final_iter:02d}" / "artifacts" / "Alpha_Scalar.json"
+    imerg_gag_dir = _p(paths_cfg["data"]["processed"]["imerg_gag_dir"])
+
+    if not alpha_path.exists():
+        print(f"⚠  {alpha_path.name} not found — skipping cluster plot.")
+        return
+
+    with open(alpha_path) as fh:
+        alpha_data = json.load(fh)
+    event_alphas: dict = alpha_data.get("event_alphas", {})
+
+    # Compute average IMERG total (mm) per event from GAG files
+    imerg_totals: dict = {}
+    for event_id in event_alphas:
+        gag_path = imerg_gag_dir / f"{event_id}.gag"
+        if gag_path.exists():
+            try:
+                gag = GagFile(gag_path)
+                totals = gag.get_total_rainfall_per_station()
+                imerg_totals[event_id] = float(np.mean(totals)) if totals else float("nan")
+            except Exception:
+                pass
+
+    # Use final iteration Performance.csv; filter MEAN_MAPE row
+    perf_df = perf_iterations[final_iter].copy()
+    perf_df = perf_df[perf_df["event_id"] != "MEAN_MAPE"].copy()
+    # Rename column for plot function if needed
+    if "Q_obs_m3s" not in perf_df.columns and "Q_obs" in perf_df.columns:
+        perf_df = perf_df.rename(columns={"Q_obs": "Q_obs_m3s"})
+    # Add Q_obs_m3s from DHM discharge if not in performance CSV
+    if "Q_obs_m3s" not in perf_df.columns:
+        dhm_dir = _p(paths_cfg["data"]["processed"]["dhm_dir"])
+        q_peaks = {}
+        for _, row in perf_df.iterrows():
+            eid = row["event_id"]
+            f = dhm_dir / f"discharge_{eid}.csv"
+            if f.exists():
+                df = pd.read_csv(f)
+                col = next((c for c in df.columns if "Discharge" in c), None)
+                if col:
+                    q_peaks[eid] = float(df[col].max())
+        perf_df["Q_obs_m3s"] = perf_df["event_id"].map(q_peaks)
+
+    if event_alphas and imerg_totals and not perf_df.empty:
+        plot_cluster_analysis(
+            perf_df=perf_df,
+            event_alphas=event_alphas,
+            imerg_totals=imerg_totals,
+            output_path=figures_dir / "03_cluster_analysis.png",
+        )
+    else:
+        print("⚠  Insufficient data for cluster plot — skipping.")
+
+
 def _run_watershed(run_root: Path) -> None:
     figures_dir = run_root / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -201,6 +262,9 @@ def _run_watershed(run_root: Path) -> None:
         perf_iterations,
         output_path=figures_dir / "02_watershed_performance.png",
     )
+
+    # Plot 3: Cluster analysis (requires final Alpha_Scalar.json + IMERG GAG totals)
+    _plot_cluster(run_root, perf_iterations, figures_dir)
 
     print(f"\nAll figures saved → {figures_dir}")
 

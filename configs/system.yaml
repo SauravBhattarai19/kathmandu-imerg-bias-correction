@@ -16,6 +16,8 @@ watershed_correction:
   convergence_threshold:  0.02
   alpha_bounds:           [0.2, 5.0]
   min_elasticity:         0.10
+  trim_fraction:          0.25   # discard top/bottom 25% of per-event log-alphas
+                                 # (robust aggregation for bimodal event populations)
   # parallel_runs and threads_per_run come from gssha: section above
 
 bias_correction:
